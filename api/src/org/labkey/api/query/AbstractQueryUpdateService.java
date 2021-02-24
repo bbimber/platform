@@ -24,6 +24,7 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.labkey.api.assay.AssayFileWriter;
 import org.labkey.api.attachments.AttachmentFile;
@@ -970,7 +971,7 @@ public abstract class AbstractQueryUpdateService implements QueryUpdateService
 
         void validateDefaultData(List<Map<String,Object>> rows)
         {
-            assertEquals(rows.size(), 3);
+            assertEquals(3, rows.size());
 
             assertEquals(0, rows.get(0).get("pk"));
             assertEquals(1, rows.get(1).get("pk"));
@@ -997,7 +998,10 @@ public abstract class AbstractQueryUpdateService implements QueryUpdateService
             QueryUpdateService qus = requireNonNull(rTableInfo.getUpdateService());
             BatchValidationException errors = new BatchValidationException();
             var rows = qus.insertRows(user, c, getTestData().load(), errors, null, null);
-            assertFalse(errors.hasErrors());
+            if (errors.hasErrors())
+            {
+                throw errors;
+            }
             validateDefaultData(rows);
             validateDefaultData(getRows());
 
@@ -1005,7 +1009,7 @@ public abstract class AbstractQueryUpdateService implements QueryUpdateService
             assertTrue(errors.hasErrors());
         }
 
-        @Test
+        @Test @Ignore
         public void UPSERT() throws Exception
         {
             if (null == ListService.get())
@@ -1027,7 +1031,10 @@ public abstract class AbstractQueryUpdateService implements QueryUpdateService
             QueryUpdateService qus = requireNonNull(rTableInfo.getUpdateService());
             BatchValidationException errors = new BatchValidationException();
             var count = qus.importRows(user, c, getTestData(), errors, null, null);
-            assertFalse(errors.hasErrors());
+            if (errors.hasErrors())
+            {
+                throw errors;
+            }
             assert(count == 3);
             validateDefaultData(getRows());
 
@@ -1051,18 +1058,20 @@ public abstract class AbstractQueryUpdateService implements QueryUpdateService
             mergeRows.add(CaseInsensitiveHashMap.of("pk",2,"s","TWO"));
             mergeRows.add(CaseInsensitiveHashMap.of("pk",3,"s","THREE"));
             BatchValidationException errors = new BatchValidationException();
-            int count=0;
+            int count;
             try (var tx = rTableInfo.getSchema().getScope().ensureTransaction())
             {
-                var ret = qus.mergeRows(user, c, new ListofMapsDataIterator(mergeRows.get(0).keySet(), mergeRows), errors, null, null);
+                count = qus.mergeRows(user, c, new ListofMapsDataIterator(mergeRows.get(0).keySet(), mergeRows), errors, null, null);
                 if (!errors.hasErrors())
                 {
                     tx.commit();
-                    count = ret;
+                }
+                else
+                {
+                    throw errors;
                 }
             }
-            assertFalse("mergeRows error(s): " + errors.getMessage(), errors.hasErrors());
-            assertEquals(count,2);
+            assertEquals(2, count);
             var rows = getRows();
             // test existing row value is updated
             assertEquals("TWO", rows.get(2).get("s"));
@@ -1091,8 +1100,11 @@ public abstract class AbstractQueryUpdateService implements QueryUpdateService
             DataIteratorContext context = new DataIteratorContext();
             context.setInsertOption(InsertOption.REPLACE);
             var count = qus.loadRows(user, c, new ListofMapsDataIterator(mergeRows.get(0).keySet(), mergeRows), context, null);
-            assertFalse(context.getErrors().hasErrors());
-            assertEquals(count,2);
+            if(context.getErrors().hasErrors())
+            {
+                throw context.getErrors();
+            }
+            assertEquals(2, count);
             var rows = getRows();
             // test existing row value is updated
             assertEquals("TWO", rows.get(2).get("s"));
@@ -1103,7 +1115,7 @@ public abstract class AbstractQueryUpdateService implements QueryUpdateService
             assertNull(rows.get(3).get("i"));
         }
 
-        @Test
+        @Test @Ignore
         public void IMPORT_IDENTITY()
         {
             if (null == ListService.get())
