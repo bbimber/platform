@@ -17,32 +17,24 @@
 %>
 <%@ page import="org.apache.commons.lang3.math.NumberUtils"%>
 <%@ page import="org.labkey.api.data.Container"%>
-<%@ page import="org.labkey.api.data.ContainerManager"%>
 <%@ page import="org.labkey.api.data.DataRegionSelection"%>
 <%@ page import="org.labkey.api.exp.property.DomainProperty"%>
-<%@ page import="org.labkey.api.issues.IssueDetailHeaderLinkProvider"%>
-<%@ page import="org.labkey.api.issues.IssuesListDefService"%>
+<%@ page import="org.labkey.api.issues.model.Issue"%>
+<%@ page import="org.labkey.api.issues.model.IssueListDef"%>
 <%@ page import="org.labkey.api.security.User" %>
 <%@ page import="org.labkey.api.security.permissions.ReadPermission" %>
 <%@ page import="org.labkey.api.util.PageFlowUtil" %>
 <%@ page import="org.labkey.api.view.ActionURL" %>
 <%@ page import="org.labkey.api.view.HttpView" %>
 <%@ page import="org.labkey.api.view.JspView" %>
-<%@ page import="org.labkey.api.view.NavTree" %>
 <%@ page import="org.labkey.api.view.ViewContext" %>
 <%@ page import="org.labkey.issue.IssuesController" %>
-<%@ page import="org.labkey.api.issues.model.Issue" %>
-<%@ page import="org.labkey.api.issues.model.IssueListDef" %>
 <%@ page import="org.labkey.issue.model.IssueManager" %>
 <%@ page import="org.labkey.issue.model.IssuePage" %>
 <%@ page import="org.labkey.issue.view.IssuesListView" %>
 <%@ page import="org.labkey.issue.view.RelatedIssuesView" %>
 <%@ page import="java.util.ArrayList" %>
-<%@ page import="java.util.List" %>
-<%@ page import="java.util.Map" %>
 <%@ page import="java.util.Set" %>
-<%@ page import="java.util.stream.Collectors" %>
-<%@ page import="java.util.stream.Stream" %>
 <%@ taglib prefix="labkey" uri="http://www.labkey.org/taglib" %>
 <%@ page extends="org.labkey.api.jsp.JspBase" %>
 <%
@@ -88,7 +80,7 @@
 <%
     }
 
-    for (String issueId : issueIds )
+    for (String issueId : issueIds)
     {
         Issue issue = null;
         if (NumberUtils.isCreatable(issueId))
@@ -97,44 +89,10 @@
         if (issue == null)
             continue;
 
-        boolean hasReadPermission = ContainerManager.getForId(issue.getContainerId()).hasPermission(getUser(), ReadPermission.class);
-
-        if (!hasReadPermission)
+        if (!issue.getContainerFromId().hasPermission(getUser(), ReadPermission.class))
             continue;
 
         bean.setIssue(issue);
-        // create collections for additional custom columns and distribute them evenly in the form
-        List<DomainProperty> column1Props = new ArrayList<>();
-        List<DomainProperty> column2Props = new ArrayList<>();
-        int i=0;
-
-        for (DomainProperty prop : bean.getCustomColumnConfiguration().getCustomProperties())
-        {
-            if ((i++ % 2) == 0)
-                column1Props.add(prop);
-            else
-                column2Props.add(prop);
-        }
-
-        List<DomainProperty> propertiesList = new ArrayList<>(bean.getCustomColumnConfiguration().getCustomProperties());
-        Map<String, DomainProperty> propertyMap = bean.getCustomColumnConfiguration().getPropertyMap();
-
-        propertiesList.addAll(Stream.of("type", "area", "priority", "milestone")
-                .filter(propertyMap::containsKey)
-                .map(propertyMap::get)
-                .collect(Collectors.toList()));
-
-
-        List<NavTree> additionalHeaderLinks = new ArrayList<>();
-        for (IssueDetailHeaderLinkProvider provider : IssuesListDefService.get().getIssueDetailHeaderLinkProviders())
-        {
-            IssueListDef issueListDef = IssueManager.getInstance().getIssueListDef(getContainer(), issue.getIssueDefId());
-            if (issueListDef != null)
-            {
-                boolean issueIsOpen = Issue.statusOPEN.equals(issue.getStatus());
-                additionalHeaderLinks.addAll(provider.getLinks(issueListDef.getDomain(getUser()), issue.getIssueId(), issueIsOpen, issue.getProperties(), getContainer(), getUser()));
-            }
-        }
 
         String recentTimeStampId = "recentTimeStamp" + issueId;
         String timestampsToggleId = "timestampsToggle" + issueId;
