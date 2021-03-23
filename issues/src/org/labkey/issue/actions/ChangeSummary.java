@@ -56,8 +56,8 @@ import org.labkey.issue.CustomColumnConfiguration;
 import org.labkey.issue.IssueUpdateEmailTemplate;
 import org.labkey.issue.IssuesController;
 import org.labkey.issue.model.CustomColumn;
-import org.labkey.issue.model.Issue;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 import org.springframework.web.servlet.mvc.Controller;
 

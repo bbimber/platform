@@ -23,7 +23,7 @@ import org.labkey.api.view.ActionURL;
 import org.labkey.api.view.JspView;
 import org.labkey.api.view.ViewContext;
 import org.labkey.issue.IssuesController;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 
 import java.util.Map;

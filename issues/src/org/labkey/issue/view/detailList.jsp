@@ -31,8 +31,8 @@
 <%@ page import="org.labkey.api.view.NavTree" %>
 <%@ page import="org.labkey.api.view.ViewContext" %>
 <%@ page import="org.labkey.issue.IssuesController" %>
-<%@ page import="org.labkey.issue.model.Issue" %>
-<%@ page import="org.labkey.issue.model.IssueListDef" %>
+<%@ page import="org.labkey.api.issues.model.Issue" %>
+<%@ page import="org.labkey.api.issues.model.IssueListDef" %>
 <%@ page import="org.labkey.issue.model.IssueManager" %>
 <%@ page import="org.labkey.issue.model.IssuePage" %>
 <%@ page import="org.labkey.issue.view.IssuesListView" %>
@@ -128,7 +128,7 @@
         List<NavTree> additionalHeaderLinks = new ArrayList<>();
         for (IssueDetailHeaderLinkProvider provider : IssuesListDefService.get().getIssueDetailHeaderLinkProviders())
         {
-            IssueListDef issueListDef = IssueManager.getIssueListDef(getContainer(), issue.getIssueDefId());
+            IssueListDef issueListDef = IssueManager.getInstance().getIssueListDef(getContainer(), issue.getIssueDefId());
             if (issueListDef != null)
             {
                 boolean issueIsOpen = Issue.statusOPEN.equals(issue.getStatus());

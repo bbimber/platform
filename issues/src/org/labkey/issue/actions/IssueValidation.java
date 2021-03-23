@@ -39,8 +39,8 @@ import org.labkey.api.view.UnauthorizedException;
 import org.labkey.api.view.ViewServlet;
 import org.labkey.issue.CustomColumnConfiguration;
 import org.labkey.issue.IssuesController;
-import org.labkey.issue.model.Issue;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
@@ -67,7 +67,7 @@ public class IssueValidation
         // handle custom field types
         if (issueListDef != null)
         {
-            TableInfo tableInfo = issueListDef.createTable(user);
+            TableInfo tableInfo = IssueManager.createTable(issueListDef, user);
             for (Map.Entry<String, String> entry : newFields.entrySet())
             {
                 // special case the assigned to field if the status is closed

@@ -37,8 +37,8 @@ import org.labkey.api.security.User;
 import org.labkey.api.util.HtmlString;
 import org.labkey.api.view.ActionURL;
 import org.labkey.issue.IssuesController;
-import org.labkey.issue.model.Issue;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 
 import java.util.Collections;

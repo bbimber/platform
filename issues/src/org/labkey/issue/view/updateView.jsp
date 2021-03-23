@@ -34,8 +34,8 @@
 <%@ page import="org.labkey.issue.IssuesController.DetailsAction" %>
 <%@ page import="org.labkey.issue.IssuesController.EmailPrefsAction" %>
 <%@ page import="org.labkey.issue.IssuesController.ListAction" %>
-<%@ page import="org.labkey.issue.model.Issue" %>
-<%@ page import="org.labkey.issue.model.IssueListDef" %>
+<%@ page import="org.labkey.api.issues.model.Issue" %>
+<%@ page import="org.labkey.api.issues.model.IssueListDef" %>
 <%@ page import="org.labkey.issue.model.IssueManager" %>
 <%@ page import="org.labkey.issue.model.IssueManager.EntryTypeNames" %>
 <%@ page import="org.labkey.issue.model.IssuePage" %>
@@ -106,7 +106,7 @@
     final int emailPrefs = IssueManager.getUserEmailPreferences(c, user.getUserId());
     IssueListDef issueListDef = IssueManager.getIssueListDef(getContainer(), issue.getIssueDefName());
     if (issueListDef == null)
-        issueListDef = IssueManager.getIssueListDef(issue);
+        issueListDef = IssueManager.getInstance().getIssueListDef(issue);
 
     BindException errors = bean.getErrors();
     ActionURL completionUrl = urlProvider(SecurityUrls.class).getCompleteUserReadURL(c);

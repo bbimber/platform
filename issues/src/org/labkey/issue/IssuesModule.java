@@ -25,6 +25,7 @@ import org.labkey.api.data.SqlExecutor;
 import org.labkey.api.exp.property.PropertyService;
 import org.labkey.api.issues.IssuesListDefService;
 import org.labkey.api.issues.IssuesSchema;
+import org.labkey.api.issues.IssuesService;
 import org.labkey.api.module.DefaultModule;
 import org.labkey.api.module.Module;
 import org.labkey.api.module.ModuleContext;
@@ -36,6 +37,7 @@ import org.labkey.api.search.SearchService;
 import org.labkey.api.security.SecurityManager;
 import org.labkey.api.security.User;
 import org.labkey.api.security.UserManager;
+import org.labkey.api.services.ServiceRegistry;
 import org.labkey.api.util.PageFlowUtil;
 import org.labkey.api.util.emailTemplate.EmailTemplateService;
 import org.labkey.api.view.ActionURL;
@@ -45,7 +47,7 @@ import org.labkey.api.view.ViewContext;
 import org.labkey.api.view.WebPartFactory;
 import org.labkey.api.view.WebPartView;
 import org.labkey.issue.model.GeneralIssuesListDefProvider;
-import org.labkey.issue.model.Issue;
+import org.labkey.api.issues.model.Issue;
 import org.labkey.issue.model.IssueCommentType;
 import org.labkey.issue.model.IssueManager;
 import org.labkey.issue.model.IssuesListDefServiceImpl;
@@ -85,6 +87,7 @@ public class IssuesModule extends DefaultModule implements SearchService.Documen
     @Override
     protected void init()
     {
+        ServiceRegistry.get().registerService(IssuesService.class, IssueManager.getInstance());
         addController("issues", IssuesController.class);
         IssuesQuerySchema.register(this);
 

@@ -33,8 +33,8 @@
 <%@ page import="org.labkey.api.view.template.ClientDependencies" %>
 <%@ page import="org.labkey.issue.IssuesController" %>
 <%@ page import="org.labkey.issue.IssuesController.EmailPrefsAction" %>
-<%@ page import="org.labkey.issue.model.Issue" %>
-<%@ page import="org.labkey.issue.model.IssueListDef" %>
+<%@ page import="org.labkey.api.issues.model.Issue" %>
+<%@ page import="org.labkey.api.issues.model.IssueListDef" %>
 <%@ page import="org.labkey.issue.model.IssueManager" %>
 <%@ page import="org.labkey.issue.model.IssueManager.EntryTypeNames" %>
 <%@ page import="org.labkey.issue.model.IssuePage" %>
@@ -69,7 +69,7 @@
     final boolean hasInsertPerms = c.hasPermission(getUser(), InsertPermission.class);
 
     List<Issue.Comment> commentLinkedList = IssueManager.getCommentsForRelatedIssues(issue, user);
-    IssueListDef issueDef = IssueManager.getIssueListDef(issue);
+    IssueListDef issueDef = IssueManager.getInstance().getIssueListDef(issue);
     EntryTypeNames names = IssueManager.getEntryTypeNames(c, issueDef.getName());
 
     List<DomainProperty> column1Props = new ArrayList<>();
@@ -127,7 +127,7 @@
     List<NavTree> additionalHeaderLinks = new ArrayList<>();
     for (IssueDetailHeaderLinkProvider provider : IssuesListDefService.get().getIssueDetailHeaderLinkProviders())
     {
-        IssueListDef issueListDef = IssueManager.getIssueListDef(getContainer(), issue.getIssueDefId());
+        IssueListDef issueListDef = IssueManager.getInstance().getIssueListDef(getContainer(), issue.getIssueDefId());
         if (issueListDef != null)
         {
             boolean issueIsOpen = Issue.statusOPEN.equals(issue.getStatus());

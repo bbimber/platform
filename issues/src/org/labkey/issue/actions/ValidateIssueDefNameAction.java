@@ -22,7 +22,7 @@ import org.labkey.api.action.ReadOnlyApiAction;
 import org.labkey.api.exp.property.Domain;
 import org.labkey.api.security.RequiresPermission;
 import org.labkey.api.security.permissions.ReadPermission;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.query.IssuesListDefTable;
 import org.springframework.validation.BindException;
 

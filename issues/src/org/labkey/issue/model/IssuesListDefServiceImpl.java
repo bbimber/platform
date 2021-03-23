@@ -32,6 +32,8 @@ import org.labkey.api.issues.IssuesDomainKindProperties;
 import org.labkey.api.issues.IssuesListDefProvider;
 import org.labkey.api.issues.IssuesListDefService;
 import org.labkey.api.issues.IssuesSchema;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.api.query.ValidationException;
 import org.labkey.api.security.Group;
 import org.labkey.api.security.SecurityManager;
@@ -206,7 +208,7 @@ public class IssuesListDefServiceImpl implements IssuesListDefService
     @Override
     public Domain getDomainFromIssueDefId(int issueDefId, Container container, User user)
     {
-        IssueListDef issueListDef = IssueManager.getIssueListDef(container, issueDefId);
+        IssueListDef issueListDef = IssueManager.getInstance().getIssueListDef(container, issueDefId);
         if (issueListDef != null)
         {
             Domain domain = issueListDef.getDomain(user);
@@ -278,7 +280,7 @@ public class IssuesListDefServiceImpl implements IssuesListDefService
             throw new IllegalArgumentException("Could not find the IssueListDef with the following name: " + issueDefName);
 
         Issue issue = new Issue();
-        issue.open(container, user);
+        IssueManager.open(issue, container, user);
         issue.setIssueDefName(def.getName());
         issue.setAssignedTo(user.getUserId());
         issue.setTitle(title);

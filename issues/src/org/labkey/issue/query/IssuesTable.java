@@ -75,8 +75,8 @@ import org.labkey.api.util.StringUtilsLabKey;
 import org.labkey.api.util.Tuple3;
 import org.labkey.api.view.ActionURL;
 import org.labkey.issue.IssuesController;
-import org.labkey.issue.model.Issue;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 import org.labkey.issue.model.IssuePage;
 
@@ -238,7 +238,7 @@ public class IssuesTable extends FilteredTable<IssuesQuerySchema> implements Upd
         duplicateCol.setFk( QueryForeignKey.from(getUserSchema(), getContainerFilter())
                 .table(this).key("IssueId").display("IssueId") );
 
-        TableInfo defTable = _issueDef.createTable(getUserSchema().getUser());
+        TableInfo defTable = IssueManager.createTable(_issueDef, getUserSchema().getUser());
 
         HashMap<String,DomainProperty> properties = new HashMap<>();
         for (DomainProperty dp : _issueDef.getDomain(getUserSchema().getUser()).getProperties())
@@ -361,7 +361,7 @@ public class IssuesTable extends FilteredTable<IssuesQuerySchema> implements Upd
     @Override
     public SQLFragment getFromSQL(String alias)
     {
-        TableInfo provisioned = _issueDef.createTable(getUserSchema().getUser());
+        TableInfo provisioned = IssueManager.createTable(_issueDef, getUserSchema().getUser());
 
         SQLFragment sql = new SQLFragment();
         sql.append("(SELECT * FROM\n");
@@ -538,7 +538,7 @@ public class IssuesTable extends FilteredTable<IssuesQuerySchema> implements Upd
 
                 // update provisioned table -- note that entityId isn't the PK so we need to use the filter to update the correct row instead
                 keys = new Object[] {};
-                TableInfo t = _issueDef.createTable(user);
+                TableInfo t = IssueManager.createTable(_issueDef, user);
                 SimpleFilter filter = new SimpleFilter(FieldKey.fromParts("EntityId"), entityId);
                 ret.putAll(Table.update(user, t, row, keys, filter, Level.DEBUG));
 
@@ -606,7 +606,7 @@ public class IssuesTable extends FilteredTable<IssuesQuerySchema> implements Upd
 
             // Insert into issues.issues then the provisioned table
             var step2 = new TableInsertDataIteratorBuilder(step0, IssuesSchema.getInstance().getTableInfoIssues(), c);
-            var step3 = new TableInsertDataIteratorBuilder(step2, _issueDef.createTable(getUserSchema().getUser()), c);
+            var step3 = new TableInsertDataIteratorBuilder(step2, IssueManager.createTable(_issueDef, getUserSchema().getUser()), c);
 
             return LoggingDataIterator.wrap(step3.getDataIterator(context));
         }

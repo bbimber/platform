@@ -18,7 +18,7 @@ package org.labkey.issue.model;
 import org.jetbrains.annotations.NotNull;
 import org.labkey.api.attachments.AttachmentType;
 import org.labkey.api.data.EntityAttachmentParent;
-import org.labkey.issue.model.Issue.Comment;
+import org.labkey.api.issues.model.Issue.Comment;
 
 public class CommentAttachmentParent extends EntityAttachmentParent
 {

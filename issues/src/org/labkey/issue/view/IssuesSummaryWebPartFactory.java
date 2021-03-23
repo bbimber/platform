@@ -24,7 +24,7 @@ import org.labkey.api.view.ViewContext;
 import org.labkey.api.view.WebPartView;
 import org.labkey.issue.IssuesController;
 import org.labkey.issue.IssuesModule;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 
 import java.util.Map;

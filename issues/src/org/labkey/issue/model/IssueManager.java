@@ -29,28 +29,20 @@ import org.labkey.api.attachments.AttachmentParent;
 import org.labkey.api.attachments.AttachmentService;
 import org.labkey.api.cache.Cache;
 import org.labkey.api.collections.CaseInsensitiveHashMap;
-import org.labkey.api.data.Container;
-import org.labkey.api.data.ContainerManager;
-import org.labkey.api.data.CoreSchema;
-import org.labkey.api.data.DatabaseCache;
-import org.labkey.api.data.DbSchema;
-import org.labkey.api.data.DbScope;
-import org.labkey.api.data.Entity;
-import org.labkey.api.data.ObjectFactory;
-import org.labkey.api.data.PropertyManager;
-import org.labkey.api.data.Results;
-import org.labkey.api.data.SQLFragment;
-import org.labkey.api.data.SimpleFilter;
-import org.labkey.api.data.Sort;
-import org.labkey.api.data.SqlExecutor;
-import org.labkey.api.data.SqlSelector;
-import org.labkey.api.data.Table;
-import org.labkey.api.data.TableInfo;
-import org.labkey.api.data.TableSelector;
+import org.labkey.api.data.*;
+import org.labkey.api.exp.ExperimentException;
+import org.labkey.api.exp.api.StorageProvisioner;
 import org.labkey.api.exp.property.Domain;
+import org.labkey.api.exp.property.DomainProperty;
+import org.labkey.api.exp.property.Lookup;
+import org.labkey.api.exp.property.PropertyService;
+import org.labkey.api.issues.AbstractIssuesListDefDomainKind;
 import org.labkey.api.issues.IssuesListDefProvider;
 import org.labkey.api.issues.IssuesListDefService;
 import org.labkey.api.issues.IssuesSchema;
+import org.labkey.api.issues.IssuesService;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.api.module.Module;
 import org.labkey.api.module.ModuleLoader;
 import org.labkey.api.query.BatchValidationException;
@@ -80,6 +72,7 @@ import org.labkey.api.util.PageFlowUtil;
 import org.labkey.api.util.Path;
 import org.labkey.api.util.StringUtilsLabKey;
 import org.labkey.api.util.TestContext;
+import org.labkey.api.util.UnexpectedException;
 import org.labkey.api.view.ActionURL;
 import org.labkey.api.view.AjaxCompletion;
 import org.labkey.api.view.HttpView;
@@ -115,6 +108,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import static org.labkey.api.search.SearchService.PROPERTY.categories;
 import static org.labkey.api.security.UserManager.USER_DISPLAY_NAME_COMPARATOR;
@@ -124,8 +118,9 @@ import static org.labkey.api.security.UserManager.USER_DISPLAY_NAME_COMPARATOR;
  * Date: Mar 11, 2005
  * Time: 11:07:27 AM
  */
-public class IssueManager
+public class IssueManager implements IssuesService
 {
+    private static final IssueManager _instance = new IssueManager();
     private static final Logger _log = LogManager.getLogger(IssueManager.class);
     public static final SearchService.SearchCategory searchCategory = new SearchService.SearchCategory("issue", "Issues");
     // UNDONE: Keywords, Summary, etc.
@@ -140,35 +135,27 @@ public class IssueManager
     public static final int NOTIFY_SELF_SPAM = 8;           // spam me when I enter/edit a bug
     public static final int DEFAULT_EMAIL_PREFS = NOTIFY_ASSIGNEDTO_OPEN | NOTIFY_ASSIGNEDTO_UPDATE | NOTIFY_CREATED_UPDATE;
 
+    private static final String CAT_COMMENT_SORT = "issueCommentSort";
+    private static final String CAT_DEFAULT_INHERIT_FROM_CONTAINER = "issueDefaultInheritFromCategory";
+    private static final String CAT_ENTRY_TYPE_NAMES = "issueEntryTypeNames";
+    private static final String CAT_ISSUE_DEF_PROPERTIES = "IssueDefProperties-";
+
     private static final String ISSUES_PREF_MAP = "IssuesPreferencesMap";
     private static final String ISSUES_REQUIRED_FIELDS = "IssuesRequiredFields";
 
-    private static final String CAT_ISSUE_DEF_PROPERTIES = "IssueDefProperties-";
-
-    private static final String CAT_ENTRY_TYPE_NAMES = "issueEntryTypeNames";
-    private static final String PROP_ENTRY_TYPE_NAME_SINGULAR = "issueEntryTypeNameSingular";
-    private static final String PROP_ENTRY_TYPE_NAME_PLURAL = "issueEntryTypeNamePlural";
-
-    private static final String CAT_ASSIGNED_TO_LIST = "issueAssignedToList";
     private static final String PROP_ASSIGNED_TO_GROUP = "issueAssignedToGroup";
-
-    private static final String CAT_DEFAULT_ASSIGNED_TO_LIST = "issueDefaultAsignedToList";
     private static final String PROP_DEFAULT_ASSIGNED_TO_USER = "issueDefaultAssignedToUser";
-
-    private static final String CAT_DEFAULT_MOVE_TO_LIST = "issueDefaultMoveToList";
-    private static final String PROP_DEFAULT_MOVE_TO_CONTAINER = "issueDefaultMoveToContainer";
-
-    private static final String CAT_DEFAULT_INHERIT_FROM_CONTAINER = "issueDefaultInheritFromCategory";
     private static final String PROP_DEFAULT_INHERIT_FROM_CONTAINER = "issueDefaultInheritFromProperty";
-
-    private static final String CAT_DEFAULT_RELATED_ISSUES_LIST = "issueRelatedIssuesList";
-    private static final String PROP_DEFAULT_RELATED_ISSUES_LIST = "issueRelatedIssuesList";
-
-    private static final String CAT_COMMENT_SORT = "issueCommentSort";
-    public static final String PICK_LIST_NAME = "pickListColumns";
+    private static final String PROP_ENTRY_TYPE_NAME_PLURAL = "issueEntryTypeNamePlural";
+    private static final String PROP_ENTRY_TYPE_NAME_SINGULAR = "issueEntryTypeNameSingular";
 
     private IssueManager()
     {
+    }
+
+    public static IssueManager getInstance()
+    {
+        return _instance;
     }
 
     private static Issue _getIssue(@Nullable Container c, int issueId)
@@ -184,6 +171,13 @@ public class IssueManager
         List<Issue.Comment> comments = new TableSelector(_issuesSchema.getTableInfoComments(),
                 new SimpleFilter(FieldKey.fromParts("issueId"), issue.getIssueId()),
                 new Sort("CommentId")).getArrayList(Issue.Comment.class);
+
+        // Sort comments according to configuration setting
+        var issueListDef = getInstance().getIssueListDef(issue);
+        var issueListDefName = issueListDef != null ? issueListDef.getName() : IssueListDef.DEFAULT_ISSUE_LIST_NAME;
+        var sort = getCommentSortDirection(issue.getContainerFromId(), issueListDefName);
+        comments.sort((o1, o2) -> o1.getCreated().compareTo(o2.getCreated()) * (sort == Sort.SortDirection.ASC ? 1 : -1));
+
         issue.setComments(comments);
 
         Collection<Integer> dups = new TableSelector(_issuesSchema.getTableInfoIssues().getColumn("IssueId"),
@@ -213,7 +207,7 @@ public class IssueManager
             if (c == null)
                 c = ContainerManager.getForId(issue.getContainerId());
 
-            IssueListDef issueListDef = getIssueListDef(issue.getContainerFromId(), issue.getIssueDefId());
+            IssueListDef issueListDef = getInstance().getIssueListDef(issue.getContainerFromId(), issue.getIssueDefId());
             UserSchema userSchema = QueryService.get().getUserSchema(user, c, IssuesQuerySchema.SCHEMA_NAME);
             TableInfo table = userSchema.getTable(issueListDef.getName());
 
@@ -277,7 +271,7 @@ public class IssueManager
         Comparator<Issue.Comment> comparator = Comparator.comparing(Entity::getCreated);
         // Respect the configuration's sorting order - issue 23524
         Container issueContainer = issue.lookupContainer();
-        IssueListDef issueListDef = IssueManager.getIssueListDef(issue);
+        IssueListDef issueListDef = getInstance().getIssueListDef(issue);
         if (Sort.SortDirection.DESC == getCommentSortDirection(issueContainer, issueListDef.getName()))
         {
             comparator = comparator.reversed();
@@ -314,7 +308,7 @@ public class IssueManager
         if (issue.getAssignedTo() == null)
             issue.setAssignedTo(0);
 
-        IssueListDef issueDef = getIssueListDef(issue);
+        IssueListDef issueDef = getInstance().getIssueListDef(issue);
         if (issueDef != null)
         {
             try (DbScope.Transaction transaction = IssuesSchema.getInstance().getSchema().getScope().ensureTransaction())
@@ -339,12 +333,11 @@ public class IssueManager
                 row.remove("Related");
 
                 BatchValidationException batchErrors = new BatchValidationException();
-                List<Map<String, Object>> results;
 
-                if (issue.issueId == 0)
+                if (issue.getIssueId() == 0)
                 {
                     issue.beforeInsert(user, container.getId());
-                    results = qus.insertRows(user, container, Collections.singletonList(row), batchErrors, null, null);
+                    List<Map<String, Object>> results = qus.insertRows(user, container, Collections.singletonList(row), batchErrors, null, null);
 
                     if (!batchErrors.hasErrors())
                     {
@@ -377,7 +370,7 @@ public class IssueManager
 
     protected static void saveComments(User user, Issue issue)
     {
-        Collection<Issue.Comment> comments = issue._added;
+        Collection<Issue.Comment> comments = issue.getAdded();
         if (null == comments)
             return;
         for (Issue.Comment comment : comments)
@@ -392,7 +385,7 @@ public class IssueManager
             m.put("entityId", comment.getEntityId());
             Table.insert(user, _issuesSchema.getTableInfoComments(), m);
         }
-        issue._added = null;
+        issue.setAdded(null);
     }
 
     protected static void saveRelatedIssues(User user, Issue issue)
@@ -416,7 +409,7 @@ public class IssueManager
     {
         if (issueListDef != null)
         {
-            TableInfo tableInfo = issueListDef.createTable(user);
+            TableInfo tableInfo = createTable(issueListDef, user);
             Collection<Object> params = new ArrayList<>();
             SQLFragment sql = new SQLFragment("SELECT DisplayName, SUM(CASE WHEN Status='open' THEN 1 ELSE 0 END) AS " +
                     _issuesSchema.getSqlDialect().makeLegalIdentifier("Open") + ", SUM(CASE WHEN Status='resolved' THEN 1 ELSE 0 END) AS " +
@@ -574,7 +567,7 @@ public class IssueManager
         Container inheritFrom = getInheritFromContainer(c);
 
         //Return the container from which admin settings were inherited from
-        if(inheritFrom != null)
+        if (inheritFrom != null)
             return inheritFrom;
         return c;
     }
@@ -609,7 +602,7 @@ public class IssueManager
     public static EntryTypeNames getEntryTypeNames(Container container, boolean inheritingVals)
     {
         Container c;
-        if(inheritingVals)
+        if (inheritingVals)
             c = getInheritFromOrCurrentContainer(container);
         else
             c = container;
@@ -687,7 +680,7 @@ public class IssueManager
             if (issueListDef != null)
             {
                 SimpleFilter filter = new SimpleFilter(FieldKey.fromParts("name"), issueDefName);
-                SimpleFilter.FilterClause filterClause = IssueListDef.createFilterClause(issueListDef, user);
+                SimpleFilter.FilterClause filterClause = createFilterClause(issueListDef, user);
 
                 if (filterClause != null)
                     filter.addClause(filterClause);
@@ -733,7 +726,7 @@ public class IssueManager
             {
                 // these should all be within the same domain so we don't care which issuedef we get, they
                 // should all be the same provisioned table
-                IssueListDef issueDef = getIssueListDef(issueDefContainer, issueDefId);
+                IssueListDef issueDef = getInstance().getIssueListDef(issueDefContainer, issueDefId);
                 if (issueDef != null)
                 {
                     // get the destination issue definition
@@ -748,7 +741,7 @@ public class IssueManager
 
                         // change the container for the provisioned table provided all issues are moving within
                         // the same domain
-                        TableInfo table = issueDef.createTable(user);
+                        TableInfo table = createTable(issueDef, user);
                         SQLFragment sql = new SQLFragment("UPDATE ").append(table, "").
                                 append("SET container = ? WHERE entityId ");
                         sql.add(dest);
@@ -783,7 +776,7 @@ public class IssueManager
 
         Container inheritFromContainer = null;
 
-        if(propsValue != null)
+        if (propsValue != null)
         {
             inheritFromContainer = ContainerManager.getForId(propsValue);
         }
@@ -905,7 +898,7 @@ public class IssueManager
         Map<String, String> map = PropertyManager.getProperties(getInheritFromOrCurrentContainer(container), ISSUES_PREF_MAP);
         String requiredFields = map.get(ISSUES_REQUIRED_FIELDS);
 
-        if(getInheritFromContainer(container) != null)
+        if (getInheritFromContainer(container) != null)
         {
             return getMyRequiredIssueFields(container) + ";" + requiredFields;
         }
@@ -1117,15 +1110,33 @@ public class IssueManager
     }
 
     @Nullable
+    public IssueListDef getIssueListDef(Issue issue)
+    {
+        if (issue.getIssueDefId() != null)
+        {
+            return getIssueListDef(issue.getContainerFromId(), issue.getIssueDefId());
+        }
+        else if (issue.getIssueDefName() != null)
+        {
+            return getIssueListDef(issue.getContainerFromId(), issue.getIssueDefName());
+        }
+        return null;
+    }
+
+    @Nullable
     public static IssueListDef getIssueListDef(Container container, String name)
     {
+        if (container == null || name == null)
+            return null;
         return IssueListDefCache.getIssueListDef(container, name);
     }
 
     @Nullable
-    public static IssueListDef getIssueListDef(Container container, int rowId)
+    public IssueListDef getIssueListDef(Container container, Integer issueListDefId)
     {
-        return IssueListDefCache.getIssueListDef(container, rowId);
+        if (container == null || issueListDefId == null)
+            return null;
+        return IssueListDefCache.getIssueListDef(container, issueListDefId);
     }
 
     /**
@@ -1193,12 +1204,14 @@ public class IssueManager
         def.setLabel(label);
         def.setKind(provider.getName());
         def.beforeInsert(user, container.getId());
-        return def.save(user);
+        def = IssueManager.saveIssueListDef(def, user);
+
+        return def;
     }
 
     public static void deleteIssueListDef(int rowId, Container c, User user)
     {
-        IssueListDef def = getIssueListDef(c, rowId);
+        IssueListDef def = getInstance().getIssueListDef(c, rowId);
         if (def == null)
             throw new IllegalArgumentException("Can't find IssueDef with rowId " + rowId);
 
@@ -1220,7 +1233,7 @@ public class IssueManager
 
             // if there are no other containers referencing this domain, then it's safe to delete
             SimpleFilter filter = new SimpleFilter(FieldKey.fromParts("Name"), def.getName());
-            SimpleFilter.FilterClause filterClause = IssueListDef.createFilterClause(def, user);
+            SimpleFilter.FilterClause filterClause = createFilterClause(def, user);
 
             if (filterClause != null)
                 filter.addClause(filterClause);
@@ -1234,6 +1247,98 @@ public class IssueManager
             IssueListDefCache.uncache(c);
             transaction.commit();
         }
+    }
+
+    public static IssueListDef saveIssueListDef(IssueListDef def, User user)
+    {
+        if (def.isNew())
+        {
+            try (var tx = IssuesSchema.getInstance().getSchema().getScope().ensureTransaction())
+            {
+                def = Table.insert(user, IssuesSchema.getInstance().getTableInfoIssueListDef(), def);
+                var domain = def.getDomain(user);
+
+                if (domain == null)
+                {
+                    try
+                    {
+                        var uri = def.getDomainURI(user);
+                        var domainContainer = def.getDomainContainer(user);
+                        var domainKind = getIssueListDefDomainKind(def);
+
+                        domainKind.createLookupDomains(domainContainer, user, def.getName());
+                        domain = PropertyService.get().createDomain(domainContainer, uri, def.getName());
+
+                        ensureDomainProperties(def, domain, domainKind, domainKind.getRequiredProperties(), domainKind.getPropertyForeignKeys(domainContainer));
+                        AbstractIssuesListDefDomainKind.setDefaultValues(domain, domainKind.getRequiredProperties());
+                        domain.save(user);
+
+                        saveEntryTypeNames(domainContainer, def.getName(), domainKind.getDefaultSingularName(), domainKind.getDefaultPluralName());
+                    }
+                    catch (BatchValidationException | ExperimentException e)
+                    {
+                        throw new UnexpectedException(e);
+                    }
+                }
+                Container container = ContainerManager.getForId(def.getContainerId());
+                // issue 29493 : set the default assigned to group to site administrators
+                List<Group> siteAdminGroups = SecurityManager.getGroups(container.getProject(), true)
+                        .stream()
+                        .filter(group -> !group.isProjectGroup() && group.isAdministrators() && group.getName().equalsIgnoreCase("Administrators"))
+                        .collect(Collectors.toList());
+
+                if (siteAdminGroups.size() == 1)
+                {
+                    saveAssignedToGroup(container, def.getName(), siteAdminGroups.get(0));
+                }
+
+                IssueListDefCache.uncache(container);
+                tx.commit();
+            }
+        }
+
+        return def;
+    }
+
+    private static void ensureDomainProperties(
+            IssueListDef def,
+            Domain domain,
+            AbstractIssuesListDefDomainKind domainKind,
+            Collection<PropertyStorageSpec> requiredProps,
+            Set<PropertyStorageSpec.ForeignKey> foreignKeys
+    )
+    {
+        Map<String, PropertyStorageSpec.ForeignKey> foreignKeyMap = new CaseInsensitiveHashMap<>();
+
+        for (var fk : foreignKeys)
+        {
+            foreignKeyMap.put(fk.getColumnName(), fk);
+        }
+
+        for (var spec : requiredProps)
+        {
+            var prop = domain.addProperty();
+
+            prop.setName(spec.getName());
+            prop.setPropertyURI(domain.getTypeURI() + "#" + spec.getName());
+            prop.setRangeURI(spec.getTypeURI());
+            prop.setScale(spec.getSize());
+            prop.setRequired(!spec.isNullable());
+
+            if (foreignKeyMap.containsKey(spec.getName()))
+            {
+                var fk = foreignKeyMap.get(spec.getName());
+                var lookup = new Lookup(domain.getContainer(), fk.getSchemaName(), domainKind.getLookupTableName(def.getName(), fk.getTableName()));
+
+                prop.setLookup(lookup);
+            }
+        }
+    }
+
+    public static AbstractIssuesListDefDomainKind getIssueListDefDomainKind(IssueListDef def)
+    {
+        var domainKindName = def.getKind() != null ? def.getKind() : IssueDefDomainKind.NAME;
+        return (AbstractIssuesListDefDomainKind) PropertyService.get().getDomainKindByName(domainKindName);
     }
 
     public static int truncateIssueList(IssueListDef def, Container c, User user)
@@ -1256,7 +1361,7 @@ public class IssueManager
     private static int deleteIssueRecords(IssueListDef issueDef, Container c, User user)
     {
         assert IssuesSchema.getInstance().getSchema().getScope().isTransactionActive();
-        TableInfo issueDefTable = issueDef.createTable(user);
+        TableInfo issueDefTable = createTable(issueDef, user);
 
         List<AttachmentParent> attachmentParents = new ArrayList<>();
 
@@ -1308,18 +1413,119 @@ public class IssueManager
         return count;
     }
 
-    @Nullable
-    public static IssueListDef getIssueListDef(Issue issue)
+    public Issue create(Container container, User user, Issue issue)
     {
-        if (issue.getIssueDefId() != null)
+        return null;
+    }
+
+    @Nullable
+    public static TableInfo createTable(IssueListDef def, User user)
+    {
+        var d = def.getDomain(user);
+        if (d != null)
         {
-            return getIssueListDef(issue.getContainerFromId(), issue.getIssueDefId());
-        }
-        else if (issue.getIssueDefName() != null)
-        {
-            return getIssueListDef(issue.getContainerFromId(), issue.getIssueDefName());
+            return StorageProvisioner.createTableInfo(d);
         }
         return null;
+    }
+
+    /**
+     * Creates a filter with the proper scope for the specified issue list definition
+     */
+    @Nullable
+    public static SimpleFilter.FilterClause createFilterClause(IssueListDef issueListDef, User user)
+    {
+        Domain domain = issueListDef.getDomain(user);
+
+        if (domain != null)
+        {
+            ContainerFilter containerFilter = null;
+            Container domainContainer = domain.getContainer();
+
+            if (ContainerManager.getSharedContainer().equals(domainContainer))
+                containerFilter = new ContainerFilter.AllFolders(user);
+            else if (domainContainer.isProject())
+                containerFilter = ContainerFilter.Type.CurrentAndSubfolders.create(domainContainer, user);
+
+            if (containerFilter != null)
+                return containerFilter.createFilterClause(IssuesSchema.getInstance().getSchema(), FieldKey.fromParts("container"));
+        }
+        return null;
+    }
+
+    /**
+     * Sets resolution, resolved, duplicate, and resolvedBy to null, also assigns a value to assignedTo.
+     * @param beforeView This is necessary because beforeReOpen gets called twice. Once before we display the view
+     * and once during handlePost. If we change assignedTo during handlePost then we overwrite the user's choice,
+     * beforeView prevents that from happening.
+     */
+    public static void beforeReOpen(Issue issue, Container c, boolean beforeView)
+    {
+        issue.setResolution(null);
+        issue.setResolved(null);
+        issue.setDuplicate(null);
+
+        if (issue.getResolvedBy() != null && beforeView)
+            issue.setAssignedTo(validateAssignedTo(c, issue.getResolvedBy()));
+
+        issue.setResolvedBy(null);
+    }
+
+    public static void beforeResolve(Issue issue, Container c, User u)
+    {
+        issue.setStatus(Issue.statusRESOLVED);
+
+        issue.setResolvedBy(u.getUserId()); // Current user
+        issue.setResolved(new Date());      // Current date
+
+        issue.setAssignedTo(validateAssignedTo(c, issue.getCreatedBy()));
+        if (issue.getTitle() != null && issue.getTitle().startsWith("**"))
+        {
+            issue.setTitle(issue.getTitle().substring(2));
+        }
+    }
+
+    public static void beforeUpdate(Issue issue, Container c)
+    {
+        // Make sure assigned to user still has permission
+        issue.setAssignedTo(validateAssignedTo(c, issue.getAssignedTo()));
+    }
+
+    public static void change(Issue issue, User u)
+    {
+        issue.beforeUpdate(u);
+    }
+
+    public static void close(Issue issue, User u)
+    {
+        change(issue, u);
+        issue.setStatus(Issue.statusCLOSED);
+
+        issue.setClosedBy(issue.getModifiedBy());
+        issue.setClosed(issue.getModified());
+        // UNDONE: assignedTo is not nullable in database
+        // UNDONE: let application enforce non-null for open/resolved bugs
+        // UNDONE: currently AssignedTo list defaults to Guest (user 0)
+        issue.setAssignedTo(0);
+    }
+
+    public static void open(Issue issue, Container c, User u)
+    {
+        if (issue.getCreatedBy() != 0)
+            u = UserManager.getUser(issue.getCreatedBy()) != null ? UserManager.getUser(issue.getCreatedBy()) : u;
+        issue.beforeInsert(u, c.getId());
+        change(issue, u);
+
+        issue.setStatus(Issue.statusOPEN);
+    }
+
+    public static void resolve(Issue issue, User u)
+    {
+        change(issue, u);
+        issue.setStatus(Issue.statusRESOLVED);
+
+        issue.setResolvedBy(issue.getModifiedBy());
+        issue.setResolved(issue.getModified());
     }
 
     public static WebdavResource resolve(String id)
@@ -1352,7 +1558,7 @@ public class IssueManager
         IssueResource(Issue issue)
         {
             super(new Path("issue:" + issue.getIssueId()));
-            _issueId = issue.issueId;
+            _issueId = issue.getIssueId();
             Map<String,Object> m = _issueFactory.toMap(issue, null);
             // UNDONE: custom field names
             // UNDONE: user names
@@ -1512,7 +1718,7 @@ public class IssueManager
                 def.setLabel(IssueListDef.DEFAULT_ISSUE_LIST_NAME);
                 def.setKind(IssueDefDomainKind.NAME);
                 def.beforeInsert(context.getUser(), c.getId());
-                def.save(context.getUser());
+                IssueManager.saveIssueListDef(def, context.getUser());
             }
         }
 
@@ -1535,7 +1741,7 @@ public class IssueManager
             //
             {
                 Issue issue = new Issue();
-                issue.open(c, user);
+                IssueManager.open(issue, c, user);
                 issue.setAssignedTo(user.getUserId());
                 issue.setTitle("This is a junit test bug");
                 issue.addComment(user, HtmlString.unsafe("new issue"));
@@ -1550,6 +1756,7 @@ public class IssueManager
             // verify
             {
                 Issue issue = IssueManager.getIssue(c, user, issueId);
+                assertNotNull("issue not found", issue);
                 assertEquals("This is a junit test bug", issue.getTitle());
                 assertEquals(user.getUserId(), issue.getCreatedBy());
                 assertTrue(issue.getCreated().getTime() != 0);
@@ -1566,6 +1773,7 @@ public class IssueManager
             //
             {
                 Issue issue = IssueManager.getIssue(c, user, issueId);
+                assertNotNull("issue not found", issue);
                 issue.addComment(user, HtmlString.unsafe("what was I thinking"));
                 factory.toMap(issue, issue.getProperties());
                 IssueManager.saveIssue(user, c, issue);
@@ -1574,6 +1782,7 @@ public class IssueManager
             // verify
             {
                 Issue issue = IssueManager.getIssue(c, user, issueId);
+                assertNotNull("issue not found", issue);
                 assertEquals(2, issue.getComments().size());
                 Iterator it = issue.getComments().iterator();
                 assertEquals("new issue", ((Issue.Comment) it.next()).getHtmlComment().toString());
@@ -1585,6 +1794,7 @@ public class IssueManager
             //
             {
                 Issue issue = IssueManager.getIssue(c, user, issueId);
+                assertNotNull("issue not found", issue);
                 issue.addComment(user, HtmlString.unsafe("invalid character <\u0010>"));
                 try
                 {
@@ -1603,7 +1813,7 @@ public class IssueManager
             {
                 Issue issue = IssueManager.getIssue(c, user, issueId);
                 assertNotNull("issue not found", issue);
-                issue.resolve(user);
+                IssueManager.resolve(issue, user);
                 issue.setResolution("fixed");
                 issue.addComment(user, HtmlString.unsafe("fixed it"));
                 factory.toMap(issue, issue.getProperties());
@@ -1623,7 +1833,7 @@ public class IssueManager
             {
                 Issue issue = IssueManager.getIssue(c, user, issueId);
                 assertNotNull("issue not found", issue);
-                issue.close(user);
+                IssueManager.close(issue, user);
                 issue.addComment(user, HtmlString.unsafe("closed"));
                 factory.toMap(issue, issue.getProperties());
                 IssueManager.saveIssue(user, c, issue);
@@ -1632,6 +1842,7 @@ public class IssueManager
             // verify
             {
                 Issue issue = IssueManager.getIssue(c, user, issueId);
+                assertNotNull("issue not found", issue);
                 assertEquals(Issue.statusCLOSED, issue.getStatus());
                 assertEquals(4, issue.getComments().size());
             }

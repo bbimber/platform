@@ -45,7 +45,6 @@ import org.labkey.api.query.FilteredTable;
 import org.labkey.api.query.InvalidKeyException;
 import org.labkey.api.query.QueryParam;
 import org.labkey.api.query.QueryUpdateService;
-import org.labkey.api.query.UserIdForeignKey;
 import org.labkey.api.query.UserIdQueryForeignKey;
 import org.labkey.api.query.ValidationException;
 import org.labkey.api.security.User;
@@ -61,7 +60,7 @@ import org.labkey.api.view.ActionURL;
 import org.labkey.issue.IssuesController;
 import org.labkey.issue.actions.DeleteIssueListAction;
 import org.labkey.issue.actions.InsertIssueDefAction;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 
 import java.io.IOException;
@@ -172,7 +171,7 @@ public class IssuesListDefTable extends FilteredTable<IssuesQuerySchema>
                             Container container = ContainerManager.getForId(c);
                             if (container != null)
                             {
-                                IssueListDef issueListDef = IssueManager.getIssueListDef(container, rowId);
+                                IssueListDef issueListDef = IssueManager.getInstance().getIssueListDef(container, rowId);
                                 if (issueListDef != null)
                                 {
                                     return issueListDef.getDomainContainer(getUserSchema().getUser());
@@ -263,7 +262,7 @@ public class IssuesListDefTable extends FilteredTable<IssuesQuerySchema>
 
             IssueListDef def = null;
             if (rowId != null)
-                def = IssueManager.getIssueListDef(c, rowId);
+                def = IssueManager.getInstance().getIssueListDef(c, rowId);
             else if (name != null)
                 def = IssueManager.getIssueListDef(c, name);
             else
@@ -303,7 +302,7 @@ public class IssuesListDefTable extends FilteredTable<IssuesQuerySchema>
                 def.setKind(kind);
                 BeanUtils.populate(def, row);
 
-                def = def.save(user);
+                def = IssueManager.saveIssueListDef(def, user);
 
                 return ObjectFactory.Registry.getFactory(IssueListDef.class).toMap(def, new CaseInsensitiveHashMap<>());
             }

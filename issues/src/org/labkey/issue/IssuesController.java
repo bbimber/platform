@@ -130,9 +130,9 @@ import org.labkey.issue.actions.IssueValidation;
 import org.labkey.issue.actions.ValidateIssueDefNameAction;
 import org.labkey.issue.model.CommentAttachmentParent;
 import org.labkey.issue.model.CustomColumn;
-import org.labkey.issue.model.Issue;
-import org.labkey.issue.model.Issue.Comment;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.Issue.Comment;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 import org.labkey.issue.model.IssuePage;
 import org.labkey.issue.query.IssueDefDomainKind;
@@ -358,7 +358,7 @@ public class IssuesController extends SpringActionController
                     Issue issue = IssueManager.getIssue(getContainer(), getUser(), NumberUtils.toInt(issueId));
                     if (issue != null)
                     {
-                        IssueListDef def = IssueManager.getIssueListDef(issue);
+                        IssueListDef def = IssueManager.getInstance().getIssueListDef(issue);
                         return def != null ? def.getName() : null;
                     }
                 }
@@ -454,7 +454,7 @@ public class IssuesController extends SpringActionController
 
             IssuesQuerySchema schema = new IssuesQuerySchema(getUser(), getContainer());
             TableInfo issueTable = schema.createTable(getIssueListDef().getName(), null);
-            page.setAdditionalDetailInfo(getIssueListDef().getDomainKind().getAdditionalDetailInfo(issueTable, issueId));
+            page.setAdditionalDetailInfo(IssueManager.getIssueListDefDomainKind(getIssueListDef()).getAdditionalDetailInfo(issueTable, issueId));
 
             // remove any notifications related to this user/objectid/type
             NotificationService.get().removeNotifications(getContainer(), "issue:" + _issue.getIssueId(), Arrays.asList(Issue.class.getName()), getUser().getUserId());
@@ -590,7 +590,7 @@ public class IssuesController extends SpringActionController
             if (defaultUser != null)
                 _issue.setAssignedTo(defaultUser.getUserId());
 
-            _issue.open(getContainer(), getUser());
+            IssueManager.open(_issue, getContainer(), getUser());
             _issue.setPriority(form.getPriority());
 
             // add any of the default values from the URL for the custom/extra properties
@@ -794,7 +794,7 @@ public class IssuesController extends SpringActionController
                     issuesForm.setOldValues(prevIssue);
                     // if issue definition isn't provided get it from the issue being updated
                     if (formIssueListDef == null)
-                        formIssueListDef = IssueManager.getIssueListDef(getContainer(), prevIssue.getIssueDefId());
+                        formIssueListDef = IssueManager.getInstance().getIssueListDef(getContainer(), prevIssue.getIssueDefId());
                 }
                 else
                 {
@@ -820,8 +820,7 @@ public class IssuesController extends SpringActionController
                 if (action == IssuesApiForm.action.reopen)
                 {
                     // clear resolution, resolvedBy, and duplicate fields
-                    Issue issue = issuesForm.getBean();
-                    issue.beforeReOpen(getContainer());
+                    IssueManager.beforeReOpen(issuesForm.getBean(), getContainer(), false);
                 }
 
                 if (action == IssuesApiForm.action.resolve)
@@ -853,7 +852,7 @@ public class IssuesController extends SpringActionController
                 }
 
                 IssueListDef issueListDef = formIssueListDef != null ? formIssueListDef : defaultIssueListDef;
-                AbstractIssuesListDefDomainKind kind = issueListDef.getDomainKind();
+                AbstractIssuesListDefDomainKind kind = IssueManager.getIssueListDefDomainKind(issueListDef);
                 if (kind != null)
                 {
                     Map<String, Object> prevIssueProps = prevIssue == null ? Collections.emptyMap() : prevIssue.getProperties();
@@ -911,11 +910,11 @@ public class IssuesController extends SpringActionController
                         {
                             case insert:
                                 // for new issues, the original is always the default.
-                                issue.open(getContainer(), getUser());
-                                prevIssue.open(getContainer(), getUser());
+                                IssueManager.open(issue, getContainer(), getUser());
+                                IssueManager.open(prevIssue, getContainer(), getUser());
                                 break;
                             case update:
-                                issue.change(getUser());
+                                IssueManager.change(issue, getUser());
                                 break;
                             case resolve:
                                 if (resolution.equals("Duplicate") &&
@@ -924,14 +923,14 @@ public class IssuesController extends SpringActionController
                                 {
                                     duplicateOf = IssueManager.getIssue(null, getUser(), issue.getDuplicate().intValue());
                                 }
-                                issue.beforeResolve(getContainer(), getUser());
-                                issue.resolve(getUser());
+                                IssueManager.beforeResolve(issue, getContainer(), getUser());
+                                IssueManager.resolve(issue, getUser());
                                 break;
                             case reopen:
-                                issue.open(getContainer(), getUser());
+                                IssueManager.open(issue, getContainer(), getUser());
                                 break;
                             case close:
-                                issue.close(getUser());
+                                IssueManager.close(issue, getUser());
                                 break;
                         }
 
@@ -1108,7 +1107,7 @@ public class IssuesController extends SpringActionController
 
             // clear resolution, resolvedBy, and duplicate fields
             if (ReopenAction.class.equals(form.getAction()))
-                issue.beforeReOpen(getContainer());
+                IssueManager.beforeReOpen(issue, getContainer(), false);
 
             Issue duplicateOf = null;
             if (ResolveAction.class.equals(form.getAction()) &&
@@ -1146,18 +1145,18 @@ public class IssuesController extends SpringActionController
                 if (InsertAction.class.equals(form.getAction()))
                 {
                     // for new issues, the original is always the default.
-                    issue.open(c, user);
+                    IssueManager.open(issue, c, user);
                     prevIssue = new Issue();
-                    prevIssue.open(getContainer(), getUser());
+                    IssueManager.open(prevIssue, getContainer(), getUser());
                 }
                 else if (ResolveAction.class.equals(form.getAction()))
-                    issue.resolve(user);
+                    IssueManager.resolve(issue, user);
                 else if (ReopenAction.class.equals(form.getAction()))
-                    issue.open(c, user);
+                    IssueManager.open(issue, c, user);
                 else if (CloseAction.class.equals(form.getAction()))
-                    issue.close(user);
+                    IssueManager.close(issue, user);
                 else
-                    issue.change(user);
+                    IssueManager.change(issue, user);
 
                 // convert from email addresses & display names to userids before we hit the database
                 issue.parseNotifyList(issue.getNotifyList());
@@ -1405,7 +1404,7 @@ public class IssuesController extends SpringActionController
                     }
                     else
                     {
-                        _issueListDef = IssueManager.getIssueListDef(getIssue());
+                        _issueListDef = IssueManager.getInstance().getIssueListDef(getIssue());
                     }
                 }
             }
@@ -1620,7 +1619,7 @@ public class IssuesController extends SpringActionController
             User user = getUser();
             IssueValidation.requiresUpdatePermission(user, _issue, getContainer());
 
-            _issue.beforeUpdate(getContainer());
+            IssueManager.beforeUpdate(_issue, getContainer());
             beforeReshow(reshow, form, _issue, getIssueListDef());
 
             IssuePage page = new IssuePage(getContainer(), user);
@@ -1666,7 +1665,7 @@ public class IssuesController extends SpringActionController
             User user = getUser();
             IssueValidation.requiresUpdatePermission(user, _issue, getContainer());
 
-            _issue.beforeResolve(getContainer(), user);
+            IssueManager.beforeResolve(_issue, getContainer(), user);
 
             if (_issue.getResolution() == null || _issue.getResolution().isEmpty())
             {
@@ -1720,7 +1719,7 @@ public class IssuesController extends SpringActionController
             User user = getUser();
             IssueValidation.requiresUpdatePermission(user, _issue, getContainer());
 
-            _issue.close(user);
+            IssueManager.close(_issue, user);
             beforeReshow(reshow, form, _issue, getIssueListDef());
 
             IssuePage page = new IssuePage(getContainer(), user);
@@ -1768,8 +1767,8 @@ public class IssuesController extends SpringActionController
             User user = getUser();
             IssueValidation.requiresUpdatePermission(user, _issue, getContainer());
 
-            _issue.beforeReOpen(getContainer(), true);
-            _issue.open(getContainer(), user);
+            IssueManager.beforeReOpen(_issue, getContainer(), true);
+            IssueManager.open(_issue, getContainer(), user);
             beforeReshow(reshow, form, _issue, getIssueListDef());
 
             IssuePage page = new IssuePage(getContainer(), user);
@@ -2554,7 +2553,7 @@ public class IssuesController extends SpringActionController
                 issueListDef = IssueManager.getIssueListDef(c, getIssueDefName());
 
             if (issueListDef == null && getIssueDefId() != null)
-                issueListDef = IssueManager.getIssueListDef(c, NumberUtils.toInt(getIssueDefId()));
+                issueListDef = IssueManager.getInstance().getIssueListDef(c, NumberUtils.toInt(getIssueDefId()));
 
             return issueListDef;
         }

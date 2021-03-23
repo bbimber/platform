@@ -22,7 +22,7 @@
 <%@ page import="org.labkey.api.view.HttpView" %>
 <%@ page import="org.labkey.api.view.JspView" %>
 <%@ page import="org.labkey.issue.IssuesController" %>
-<%@ page import="org.labkey.issue.model.Issue" %>
+<%@ page import="org.labkey.api.issues.model.Issue" %>
 <%@ page extends="org.labkey.api.jsp.JspBase"%>
 <%
     JspView<IssuesController.RssBean> me = (JspView<IssuesController.RssBean>) HttpView.currentView();

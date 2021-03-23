@@ -21,7 +21,7 @@
 <%@ page import="org.labkey.api.view.HttpView"%>
 <%@ page import="org.labkey.api.view.JspView" %>
 <%@ page import="org.labkey.issue.IssuesController" %>
-<%@ page import="org.labkey.issue.model.IssueListDef" %>
+<%@ page import="org.labkey.api.issues.model.IssueListDef" %>
 <%@ page import="org.labkey.issue.model.IssueManager" %>
 <%@ page import="org.labkey.issue.view.IssuesListView" %>
 <%@ taglib prefix="labkey" uri="http://www.labkey.org/taglib" %>

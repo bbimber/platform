@@ -30,7 +30,7 @@ import org.labkey.api.view.InsertView;
 import org.labkey.api.view.NavTree;
 import org.labkey.api.view.template.ClientDependency;
 import org.labkey.issue.IssuesController;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 import org.labkey.issue.view.IssuesListView;
 import org.springframework.validation.BindException;

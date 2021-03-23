@@ -23,8 +23,8 @@ import org.labkey.api.security.User;
 import org.labkey.api.security.UserManager;
 import org.labkey.api.util.emailTemplate.UserOriginatedEmailTemplate;
 import org.labkey.api.view.ActionURL;
-import org.labkey.issue.model.Issue;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.Issue;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 
 import java.util.ArrayList;
@@ -273,7 +273,7 @@ public class IssueUpdateEmailTemplate extends UserOriginatedEmailTemplate
         String issueDefName = IssueListDef.DEFAULT_ISSUE_LIST_NAME;
         if (issue != null)
         {
-            IssueListDef issueListDef = IssueManager.getIssueListDef(issue);
+            IssueListDef issueListDef = IssueManager.getInstance().getIssueListDef(issue);
             if (issueListDef != null)
                 issueDefName = issueListDef.getName();
         }

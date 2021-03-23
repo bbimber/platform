@@ -24,6 +24,7 @@ import org.labkey.api.data.Container;
 import org.labkey.api.data.SimpleFilter;
 import org.labkey.api.data.TableSelector;
 import org.labkey.api.issues.IssuesSchema;
+import org.labkey.api.issues.model.IssueListDef;
 
 import java.util.ArrayList;
 import java.util.Collection;

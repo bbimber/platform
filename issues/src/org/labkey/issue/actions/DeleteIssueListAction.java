@@ -32,7 +32,7 @@ import org.labkey.api.view.HtmlView;
 import org.labkey.api.view.JspView;
 import org.labkey.api.view.NavTree;
 import org.labkey.api.view.UnauthorizedException;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 import org.labkey.issue.query.IssuesQuerySchema;
 import org.springframework.validation.BindException;
@@ -64,10 +64,10 @@ public class DeleteIssueListAction extends FormViewAction<DeleteIssueListAction.
 
         for (String id : ids)
         {
-            IssueListDef issueListDef = IssueManager.getIssueListDef(getContainer(),NumberUtils.toInt(id));
+            IssueListDef issueListDef = IssueManager.getInstance().getIssueListDef(getContainer(),NumberUtils.toInt(id));
             if (issueListDef != null)
             {
-                TableInfo table = issueListDef.createTable(getUser());
+                TableInfo table = IssueManager.createTable(issueListDef, getUser());
 
                 form.getRowCounts().add(new TableSelector(table, SimpleFilter.createContainerFilter(getContainer()), null).getRowCount());
                 form.getIssueDefNames().add(issueListDef.getName());

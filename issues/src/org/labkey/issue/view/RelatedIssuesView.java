@@ -35,7 +35,7 @@ import org.labkey.api.util.PageFlowUtil;
 import org.labkey.api.view.HtmlView;
 import org.labkey.api.view.VBox;
 import org.labkey.api.view.ViewContext;
-import org.labkey.issue.model.IssueListDef;
+import org.labkey.api.issues.model.IssueListDef;
 import org.labkey.issue.model.IssueManager;
 import org.labkey.issue.query.IssuesQuerySchema;
 import org.springframework.validation.BindException;
@@ -70,7 +70,7 @@ public class RelatedIssuesView extends VBox
             if (c == null || !c.hasPermission(getViewContext().getUser(), ReadPermission.class))
                 return;
 
-            IssueListDef d = IssueManager.getIssueListDef(c, issueDefId);
+            IssueListDef d = IssueManager.getInstance().getIssueListDef(c, issueDefId);
             if (d == null)
                 return;
 

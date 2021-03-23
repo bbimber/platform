@@ -19,7 +19,7 @@
 <%@ page import="org.labkey.api.security.User"%>
 <%@ page import="org.labkey.api.view.HttpView"%>
 <%@ page import="org.labkey.api.view.JspView"%>
-<%@ page import="org.labkey.issue.model.Issue"%>
+<%@ page import="org.labkey.api.issues.model.Issue"%>
 <%@ page import="java.util.regex.Matcher" %>
 <%@ page import="java.util.regex.Pattern" %>
 <%@ taglib prefix="labkey" uri="http://www.labkey.org/taglib" %>
