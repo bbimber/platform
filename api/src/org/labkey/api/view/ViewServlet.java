@@ -168,7 +168,7 @@ public class ViewServlet extends HttpServlet
             _log.debug(">> " + description);
         }
 
-        MemoryUsageLogger.logMemoryUsage(_requestCount.incrementAndGet());
+        MemoryUsageLogger.logMemoryUsageIfInterval(_requestCount.incrementAndGet());
         try (RequestInfo r = MemTracker.get().startProfiler(request, request.getRequestURI()))
         {
             SessionAppender.initThread(request);

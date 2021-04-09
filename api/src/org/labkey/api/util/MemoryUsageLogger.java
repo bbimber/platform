@@ -36,16 +36,18 @@ public class MemoryUsageLogger implements Runnable
 
     private static long _lastLog = 0;
 
-    private boolean _showHeader;
-    private int _requestNumber;
+    private final boolean _showHeader;
+    private final int _requestNumber;
+    private final boolean _delayAndGC;
 
-    public MemoryUsageLogger(boolean showHeader, int requestNumber)
+    public MemoryUsageLogger(boolean showHeader, int requestNumber, boolean delayAndGC)
     {
         _showHeader = showHeader;
         _requestNumber = requestNumber;
+        _delayAndGC = delayAndGC;
     }
 
-    public static void logMemoryUsage(int requestNumber)
+    public static void logMemoryUsageIfInterval(int requestNumber)
     {
         int interval = AppProps.getInstance().getMemoryUsageDumpInterval();
         long currentTime = System.currentTimeMillis();
@@ -53,25 +55,37 @@ public class MemoryUsageLogger implements Runnable
         {
             synchronized(LOGGER_LOCK_OBJECT)
             {
-                if (currentTime > _lastLog + interval * 60 * 1000)
+                if (currentTime > _lastLog + interval * 60L * 1000)
                 {
-                    JobRunner.getDefault().execute(new MemoryUsageLogger(_lastLog == 0, requestNumber));
-                    _lastLog = currentTime;
+                    logMemoryUsage(requestNumber, true);
                 }
             }
         }
     }
 
+    public static void logMemoryUsage(int requestNumber, boolean delayAndGC)
+    {
+        JobRunner.getDefault().execute(new MemoryUsageLogger(_lastLog == 0, requestNumber, delayAndGC));
+        _lastLog = System.currentTimeMillis();
+    }
+
     @Override
     public void run()
     {
-        try
+        if (_delayAndGC)
         {
-            // Wait a little while so that we're less likely to cause a slowdown for the HTTP thread that initiated
-            // this memory logging/GC event
-            Thread.sleep(5000);
+            try
+            {
+                // Wait a little while so that we're less likely to cause a slowdown for the HTTP thread that initiated
+                // this memory logging/GC event
+                Thread.sleep(5000);
+                System.gc();
+            }
+            catch (InterruptedException ignored)
+            {
+            }
         }
-        catch (InterruptedException ignored) {}
+
         if (_showHeader)
         {
             LOG.debug("\t******************************************************");
@@ -94,7 +108,6 @@ public class MemoryUsageLogger implements Runnable
             LOG.debug(sb.toString());
         }
 
-        System.gc();
         StringBuilder sb = new StringBuilder();
         sb.append("\t");
         sb.append(_requestNumber);

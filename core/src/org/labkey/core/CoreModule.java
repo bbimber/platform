@@ -119,7 +119,9 @@ import org.labkey.api.thumbnail.ThumbnailService;
 import org.labkey.api.usageMetrics.UsageMetricsService;
 import org.labkey.api.util.CommandLineTokenizer;
 import org.labkey.api.util.ContextListener;
+import org.labkey.api.util.DebugInfoDumper;
 import org.labkey.api.util.ExceptionUtil;
+import org.labkey.api.util.MemoryUsageLogger;
 import org.labkey.api.util.MimeMap;
 import org.labkey.api.util.PageFlowUtil;
 import org.labkey.api.util.ShutdownListener;
@@ -139,6 +141,7 @@ import org.labkey.api.view.ShortURLService;
 import org.labkey.api.view.VBox;
 import org.labkey.api.view.ViewContext;
 import org.labkey.api.view.ViewService;
+import org.labkey.api.view.ViewServlet;
 import org.labkey.api.view.WebPartFactory;
 import org.labkey.api.view.WebPartView;
 import org.labkey.api.view.menu.FolderMenu;
@@ -231,12 +234,23 @@ import org.labkey.core.wiki.WikiRenderingServiceImpl;
 import org.labkey.core.workbook.WorkbookFolderType;
 import org.labkey.core.workbook.WorkbookQueryView;
 import org.labkey.core.workbook.WorkbookSearchView;
+import org.quartz.Job;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
+import org.quartz.SimpleScheduleBuilder;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
 import org.quartz.impl.StdSchedulerFactory;
 
 import javax.servlet.ServletContext;
+import java.io.File;
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryUsage;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.ZonedDateTime;
@@ -855,6 +869,28 @@ public class CoreModule extends SpringModule implements SearchService.DocumentPr
             }
         });
 
+        try
+        {
+            Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
+            JobDetail job = JobBuilder.newJob(LoggerJob.class)
+                    .withIdentity(LoggerJob.class.getCanonicalName())
+                    .build();
+
+            Trigger trigger = TriggerBuilder.newTrigger()
+                    .withIdentity(LoggerJob.class.getCanonicalName())
+                    .startNow()
+                    .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+                            .withIntervalInSeconds(10)
+                            .repeatForever())
+                    .build();
+
+            scheduler.scheduleJob(job, trigger);
+        }
+        catch (SchedulerException e)
+        {
+            LOG.error("Failed to queue Quartz job");
+        }
+
         // populate look and feel settings and site settings with values read from startup properties as appropriate for not bootstrap
         populateLookAndFeelWithStartupProps();
         WriteableLookAndFeelProperties.populateLookAndFeelWithStartupProps();
@@ -995,6 +1031,33 @@ public class CoreModule extends SpringModule implements SearchService.DocumentPr
         MessageConfigService.setInstance(new EmailPreferenceConfigServiceImpl());
         ContainerManager.addContainerListener(new EmailPreferenceContainerListener());
         UserManager.addUserListener(new EmailPreferenceUserListener());
+    }
+
+    public static class LoggerJob implements Job
+    {
+        static double _heapDumpThreshold = 0.5;
+
+        @Override
+        public void execute(JobExecutionContext context) throws JobExecutionException
+        {
+            MemoryUsageLogger.logMemoryUsage(ViewServlet.getRequestCount(), false);
+            DebugInfoDumper.dumpThreads(1);
+            MemoryUsage usage = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+            if (usage.getUsed() > (_heapDumpThreshold * usage.getMax()))
+            {
+                _heapDumpThreshold += 0.25;
+                try
+                {
+                    LOG.error("Heap usage at " + usage.getUsed() + " out of " + usage.getMax() + ", dumping heap");
+                    File f = DebugInfoDumper.dumpHeap();
+                    LOG.error("Heap dumped to " + f);
+                }
+                catch (Exception e)
+                {
+                    LOG.error("Failed to dump heap", e);
+                }
+            }
+        }
     }
 
     @Override
