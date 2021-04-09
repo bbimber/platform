@@ -880,7 +880,7 @@ public class CoreModule extends SpringModule implements SearchService.DocumentPr
                     .withIdentity(LoggerJob.class.getCanonicalName())
                     .startNow()
                     .withSchedule(SimpleScheduleBuilder.simpleSchedule()
-                            .withIntervalInSeconds(10)
+                            .withIntervalInSeconds(2)
                             .repeatForever())
                     .build();
 
@@ -1035,16 +1035,24 @@ public class CoreModule extends SpringModule implements SearchService.DocumentPr
 
     public static class LoggerJob implements Job
     {
-        static double _heapDumpThreshold = 0.5;
+        static double _heapDumpThreshold = 0.25;
+        static int _count = 0;
+
 
         @Override
         public void execute(JobExecutionContext context) throws JobExecutionException
         {
+            if (_count++ % 5 == 0)
+            {
+                // Thread dumps are big - don't log them as often
+                DebugInfoDumper.dumpThreads(1);
+            }
+
             MemoryUsageLogger.logMemoryUsage(ViewServlet.getRequestCount(), false);
-            DebugInfoDumper.dumpThreads(1);
             MemoryUsage usage = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
             if (usage.getUsed() > (_heapDumpThreshold * usage.getMax()))
             {
+                // Increase the threshold for dumping again since they're huge
                 _heapDumpThreshold += 0.25;
                 try
                 {
