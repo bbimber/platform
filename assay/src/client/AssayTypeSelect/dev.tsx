@@ -1,14 +1,16 @@
+import React from 'react';
+import ReactDOM from 'react-dom';
+import { AppContainer } from 'react-hot-loader';
+import { ErrorBoundary } from '@labkey/components';
 
-import React from 'react'
-import ReactDOM from 'react-dom'
-import { AppContainer } from 'react-hot-loader'
-
-import { App } from './AssayTypeSelect'
+import { App } from './AssayTypeSelect';
 
 const render = () => {
     ReactDOM.render(
         <AppContainer>
-            <App/>
+            <ErrorBoundary>
+                <App/>
+            </ErrorBoundary>
         </AppContainer>,
         document.getElementById('app')
     )
